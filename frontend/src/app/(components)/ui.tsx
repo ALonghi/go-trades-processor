@@ -28,7 +28,9 @@ export function Segmented<T extends string>({
             onClick={() => onChange(o.value)}
             className={cn(
               "px-3 py-1.5 text-sm transition-colors",
-              active ? "bg-white/30 text-black" : "text-white/80 hover:bg-white/10"
+              active
+                ? "bg-white/30 text-black"
+                : "text-white/80 hover:bg-white/10",
             )}
           >
             {o.label}
@@ -42,7 +44,9 @@ export function Segmented<T extends string>({
 export function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="glass p-4">
-      <div className="text-xs uppercase tracking-wide text-white/60">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-white/60">
+        {label}
+      </div>
       <div className="mt-1 text-2xl font-semibold">{value}</div>
     </div>
   );

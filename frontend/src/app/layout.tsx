@@ -7,7 +7,11 @@ export const metadata: Metadata = {
   description: "Kafka → Go → Postgres → Next.js (liquid glass UI)",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
@@ -25,19 +29,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white/20 ring-1 ring-white/20">
                   ⚡
                 </span>
-                <span className="text-sm font-semibold tracking-tight mx-auto">Liquid Glass Holdings</span>
+                <span className="text-sm font-semibold tracking-tight mx-auto">
+                  Investments Holdings
+                </span>
               </div>
               <div className="flex items-center gap-4 text-sm">
-                <Link href="/" className="text-white/80 hover:text-white">Dashboard</Link>
-                <Link href="/trades" className="text-white/80 hover:text-white">Trades</Link>
+                <Link href="/" className="text-white/80 hover:text-white">
+                  Dashboard
+                </Link>
+                <Link href="/trades" className="text-white/80 hover:text-white">
+                  Trades
+                </Link>
               </div>
             </div>
           </nav>
         </header>
 
-        <main className="container py-8 space-y-6">
-          {children}
-        </main>
+        <main className="container py-8 space-y-6">{children}</main>
       </body>
     </html>
   );

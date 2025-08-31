@@ -5,7 +5,15 @@ import { GlassCard, Segmented, cn } from "../(components)/ui";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
-type Row = [tradeId: string, entity: string, itype: string, symbol: string, qty: number, price: number | null, ts: string];
+type Row = [
+  tradeId: string,
+  entity: string,
+  itype: string,
+  symbol: string,
+  qty: number,
+  price: number | null,
+  ts: string,
+];
 type Entity = "" | "zurich" | "new_york";
 const ENTITY_OPTIONS: Array<{ value: Entity; label: string }> = [
   { value: "", label: "All" },
@@ -14,7 +22,11 @@ const ENTITY_OPTIONS: Array<{ value: Entity; label: string }> = [
 ];
 
 const fmtQty = new Intl.NumberFormat(undefined, { maximumFractionDigits: 8 });
-const fmtPrice = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 8 });
+const fmtPrice = new Intl.NumberFormat(undefined, {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 8,
+});
 
 function usePolling<T>(fn: () => Promise<T>, deps: unknown[] = [], ms = 5000) {
   const [data, setData] = useState<T | null>(null);
@@ -43,7 +55,8 @@ function usePolling<T>(fn: () => Promise<T>, deps: unknown[] = [], ms = 5000) {
       const delay = ms + Math.floor(Math.random() * 500);
       t.current = window.setTimeout(tick, delay) as unknown as number;
     };
-    const onVis = () => (document.hidden ? t.current && clearTimeout(t.current) : tick());
+    const onVis = () =>
+      document.hidden ? t.current && clearTimeout(t.current) : tick();
     document.addEventListener("visibilitychange", onVis);
     tick();
     return () => {
@@ -84,7 +97,7 @@ export default function Trades() {
       return Array.isArray(rows) ? (rows as Row[]) : [];
     },
     [entity],
-    5000
+    5000,
   );
 
   const rows = useMemo(() => {
@@ -98,13 +111,20 @@ export default function Trades() {
       <GlassCard className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold">Trades</h1>
-          <button onClick={reload} className="cursor-pointer rounded-xl border border-white/20 px-3 py-1 text-sm text-white/90 hover:bg-white/10">
+          <button
+            onClick={reload}
+            className="cursor-pointer rounded-xl border border-white/20 px-3 py-1 text-sm text-white/90 hover:bg-white/10"
+          >
             Refresh
           </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Segmented options={ENTITY_OPTIONS} value={entity} onChange={(v) => setEntity(v as Entity)} />
+          <Segmented
+            options={ENTITY_OPTIONS}
+            value={entity}
+            onChange={(v) => setEntity(v as Entity)}
+          />
           <input
             value={symbolFilter}
             onChange={(e) => setSymbolFilter(e.target.value)}
@@ -114,7 +134,13 @@ export default function Trades() {
         </div>
 
         <div className="text-xs text-white/70">
-          {loading ? "Refreshing…" : error ? <span className="text-red-300">Error: {error}</span> : `${rows.length} row${rows.length === 1 ? "" : "s"}`}
+          {loading ? (
+            "Refreshing…"
+          ) : error ? (
+            <span className="text-red-300">Error: {error}</span>
+          ) : (
+            `${rows.length} row${rows.length === 1 ? "" : "s"}`
+          )}
         </div>
       </GlassCard>
 
@@ -139,9 +165,13 @@ export default function Trades() {
                 rows.map((r) => (
                   <tr key={r[0]} className="hover:bg-white/5">
                     <td className="py-2 pl-4">
-                      <code className="rounded bg-white/10 px-1.5 py-0.5 text-[11px]">{r[0]}</code>
+                      <code className="rounded bg-white/10 px-1.5 py-0.5 text-[11px]">
+                        {r[0]}
+                      </code>
                       <button
-                        onClick={() => navigator.clipboard.writeText(r[0]).catch(() => {})}
+                        onClick={() =>
+                          navigator.clipboard.writeText(r[0]).catch(() => {})
+                        }
                         className="ml-2 text-xs text-white/70 underline-offset-2 hover:underline"
                         title="Copy trade ID"
                       >
@@ -153,18 +183,28 @@ export default function Trades() {
                       <span
                         className={cn(
                           "inline-block rounded-full border px-2 py-0.5 text-xs",
-                          r[2] === "crypto" ? "border-fuchsia-300/50" : "border-sky-300/50"
+                          r[2] === "crypto"
+                            ? "border-fuchsia-300/50"
+                            : "border-sky-300/50",
                         )}
                       >
                         {r[2]}
                       </span>
                     </td>
                     <td className="font-medium">{r[3]}</td>
-                    <td className="text-right tabular-nums">{fmtQty.format(r[4])}</td>
-                    <td className="text-right tabular-nums">{r[5] == null ? "-" : fmtPrice.format(r[5])}</td>
+                    <td className="text-right tabular-nums">
+                      {fmtQty.format(r[4])}
+                    </td>
+                    <td className="text-right tabular-nums">
+                      {r[5] == null ? "-" : fmtPrice.format(r[5])}
+                    </td>
                     <td className="pr-4">
-                      <div className="text-xs text-white/80">{new Date(r[6]).toLocaleString()}</div>
-                      <div className="text-[10px] text-white/60">{fromNow(r[6])}</div>
+                      <div className="text-xs text-white/80">
+                        {new Date(r[6]).toLocaleString()}
+                      </div>
+                      <div className="text-[10px] text-white/60">
+                        {fromNow(r[6])}
+                      </div>
                     </td>
                   </tr>
                 ))

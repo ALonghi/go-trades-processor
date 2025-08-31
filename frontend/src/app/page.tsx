@@ -14,10 +14,9 @@ type Holding = {
 type Entity = "zurich" | "new_york" | "all";
 
 type EntityOption = {
-  value: Entity,
-  label: string
-
-}
+  value: Entity;
+  label: string;
+};
 
 const ENTITY_OPTIONS: EntityOption[] = [
   { value: "zurich", label: "Zurich" },
@@ -54,7 +53,8 @@ function usePolling<T>(fn: () => Promise<T>, deps: unknown[] = [], ms = 5000) {
       const delay = ms + Math.floor(Math.random() * 500);
       t.current = window.setTimeout(tick, delay) as unknown as number;
     };
-    const onVis = () => (document.hidden ? t.current && clearTimeout(t.current) : tick());
+    const onVis = () =>
+      document.hidden ? t.current && clearTimeout(t.current) : tick();
     document.addEventListener("visibilitychange", onVis);
     tick();
     return () => {
@@ -73,14 +73,17 @@ export default function Page() {
 
   const { data, loading, error, reload } = usePolling<Holding[]>(
     async () => {
-      const url = entity === "all" ? `${API}/api/holdings` : `${API}/api/holdings/${entity}`;
+      const url =
+        entity === "all"
+          ? `${API}/api/holdings`
+          : `${API}/api/holdings/${entity}`;
       const r = await fetch(url, { cache: "no-store" });
       if (!r.ok) throw new Error(await r.text());
       const json = await r.json();
       return Array.isArray(json) ? (json as Holding[]) : [];
     },
     [entity],
-    5000
+    5000,
   );
 
   const rows = data ?? [];
@@ -123,7 +126,9 @@ export default function Page() {
         return (
           <GlassCard key={itype}>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-medium capitalize">{itype} holdings</h2>
+              <h2 className="text-lg font-medium capitalize">
+                {itype} holdings
+              </h2>
               <span className="text-xs rounded-full bg-white/10 px-2 py-0.5">
                 {items.length} row{items.length === 1 ? "" : "s"}
               </span>
@@ -143,9 +148,13 @@ export default function Page() {
                   ) : items.length ? (
                     items.map((h) => (
                       <tr key={`${h.entity}-${h.instrument_type}-${h.symbol}`}>
-                        <td className="py-2 capitalize">{h.entity.replace("_", " ")}</td>
+                        <td className="py-2 capitalize">
+                          {h.entity.replace("_", " ")}
+                        </td>
                         <td className="font-medium">{h.symbol}</td>
-                        <td className="text-right tabular-nums">{fmtQty.format(h.quantity)}</td>
+                        <td className="text-right tabular-nums">
+                          {fmtQty.format(h.quantity)}
+                        </td>
                       </tr>
                     ))
                   ) : (
@@ -160,7 +169,13 @@ export default function Page() {
             </div>
             <div className="divider mt-4" />
             <div className="mt-3 text-xs text-white/70">
-              {error ? <span className="text-red-400">Error: {error}</span> : loading ? "Refreshing…" : "Live"}
+              {error ? (
+                <span className="text-red-400">Error: {error}</span>
+              ) : loading ? (
+                "Refreshing…"
+              ) : (
+                "Live"
+              )}
             </div>
           </GlassCard>
         );
