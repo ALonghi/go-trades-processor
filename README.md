@@ -5,9 +5,9 @@ A small, composable system for **ingesting trade events**, **processing** them i
 ## App Preview
 
 <p align="center">
-  <img src="docs/screenshot1.png" width="85%" alt="Trades Aggregated by Symbol" />
+  <img src="docs/screenshot1.png" width="100%" alt="Trades Aggregated by Symbol" />
   <br/><br/>
-  <img src="docs/screenshot2.png" width="85%" alt="View of individual Trades" />
+  <img src="docs/screenshot2.png" width="100%" alt="View of individual Trades" />
 </p>
 
 
