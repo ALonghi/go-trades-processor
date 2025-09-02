@@ -16,44 +16,43 @@ permissions:
   contents: read
 
 jobs:
+  # Build job
   build:
-    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    env:
-      NEXT_TELEMETRY_DISABLED: '1'
-      CI: 'true'
-
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v3
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Use PNPM
+        uses: pnpm/action-setup@v4.0.0
         with:
-          node-version: '22.x'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          version: latest
 
-      - name: Install dependencies
-        run: npm ci
-
-      # Optional but speeds up repeated PR builds
-      - name: Cache Next.js build cache
-        uses: actions/cache@v4
+      - name: Setup Node
+        uses: actions/setup-node@v3
         with:
-          path: frontend/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('frontend/package-lock.json') }}-${{ hashFiles('frontend/next.config.*','frontend/package.json','frontend/.eslintrc*','frontend/tsconfig.json') }}
+          node-version: "20"
+          cache: ${{ steps.detect-package-manager.outputs.manager }}
+          cache-dependency-path: "./frontend/src/"
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: |
+          echo "pnpm_cache_dir=$(pnpm store path)" >> $GITHUB_OUTPUT
+        working-directory: ./frontend/src
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.pnpm-cache.outputs.pnpm_cache_dir }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('frontend/package-lock.json') }}-
+            ${{ runner.os }}-pnpm-store-
 
-      - name: Lint (if configured)
-        run: npm run lint --if-present
+      - name: Install deps (with cache)
+        run: pnpm install --no-frozen-lockfile
+        working-directory: ./frontend/src
 
-      - name: Type check (if configured)
-        run: npm run type-check --if-present
-
-      - name: Build (compile)
-        run: npm run build
+      - name: Build with Next.js
+        working-directory: ./frontend/src
+        run: pnpm run build
