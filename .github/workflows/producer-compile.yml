@@ -1,0 +1,45 @@
+name: Producer Go Build
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'producer/**'
+      - '.github/workflows/producer-compile.yml'
+
+# Cancel older runs of the same PR to save minutes
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: producer
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # Uses the Go version from backend/go.mod (toolchain line or go directive)
+          go-version-file: producer/go.mod
+          cache: true
+          cache-dependency-path: producer/go.sum
+
+      - name: Download deps
+        run: go mod download
+
+      - name: Build (compile) all packages
+        run: go build ./...
+
+      - name: Vet (static checks)
+        run: go vet ./...

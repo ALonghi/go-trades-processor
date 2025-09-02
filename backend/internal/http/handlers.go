@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/example/trades-aggregator/internal/cache"
+	"github.com/example/trades-aggregator/internal/domain"
 	"github.com/example/trades-aggregator/internal/holdings"
 	"github.com/example/trades-aggregator/internal/models"
 )
@@ -17,7 +18,8 @@ import (
 type Server struct {
 	R               *gin.Engine
 	HoldingsService *holdings.Service
-	Cache           *cache.Cache
+	HoldingsCache   *cache.MapCache[cache.HoldingsKey, []models.Holding]
+	TradesCache     *cache.MapCache[cache.TradesKey, []models.Trade]
 	Logger          *zap.Logger
 	TTL             time.Duration
 }
@@ -28,18 +30,14 @@ type apiError struct {
 }
 
 type tradesResponse struct {
-	Rows [][]any `json:"rows"`
+	Rows []models.Trade `json:"rows"`
 }
 
-var validEntities = map[string]struct{}{
-	"zurich":   {},
-	"new_york": {},
-}
-
-func NewServer(holdingsService *holdings.Service, c *cache.Cache, logger *zap.Logger, corsOrigin string) *Server {
+// NewServer wires the router, service, caches, and middleware.
+func NewServer(holdingsService *holdings.Service, logger *zap.Logger, corsOrigin string) *Server {
 	g := gin.New()
 
-	// Logging middleware (basic and safe)
+	// Request logging
 	g.Use(func(cn *gin.Context) {
 		start := time.Now()
 		cn.Next()
@@ -54,14 +52,13 @@ func NewServer(holdingsService *holdings.Service, c *cache.Cache, logger *zap.Lo
 
 	g.Use(gin.Recovery())
 
-	// CORS (reflect configured origin; add Vary and Max-Age)
+	// CORS
 	g.Use(func(cn *gin.Context) {
 		origin := cn.GetHeader("Origin")
 		cn.Writer.Header().Set("Vary", "Origin")
 		cn.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		cn.Writer.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		cn.Writer.Header().Set("Access-Control-Max-Age", "86400")
-		// Only echo the configured origin (or * if explicitly configured)
 		if corsOrigin == "*" {
 			cn.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		} else if origin != "" && origin == corsOrigin {
@@ -74,12 +71,19 @@ func NewServer(holdingsService *holdings.Service, c *cache.Cache, logger *zap.Lo
 		cn.Next()
 	})
 
-	s := &Server{R: g, HoldingsService: holdingsService, Cache: c, Logger: logger}
+	// Typed caches (no TTLs)
+	hc := cache.NewMapCache[cache.HoldingsKey, []models.Holding]()
+	tc := cache.NewMapCache[cache.TradesKey, []models.Trade]()
 
-	g.GET("/health", func(cn *gin.Context) {
-		cn.JSON(http.StatusOK, gin.H{"ok": true})
-	})
+	s := &Server{
+		R:               g,
+		HoldingsService: holdingsService,
+		HoldingsCache:   hc,
+		TradesCache:     tc,
+		Logger:          logger,
+	}
 
+	g.GET("/health", func(cn *gin.Context) { cn.JSON(http.StatusOK, gin.H{"ok": true}) })
 	g.GET("/api/holdings", s.getAllHoldings)
 	g.GET("/api/holdings/:entity", s.getEntityHoldings)
 	g.GET("/api/trades", s.getTrades)
@@ -109,24 +113,15 @@ func parseLimit(v string, def, min, max int) int {
 	return n
 }
 
-func normalizeEntity(v string) string {
-	return strings.ToLower(strings.TrimSpace(v))
-}
-
 // --- Handlers ---
 
 func (s *Server) getAllHoldings(c *gin.Context) {
-	const key = "holdings:all"
+	// Use the enum value for "all"
+	key := cache.HoldingsKey{Entity: domain.EntityAll}
 
-	if val, ok := s.Cache.Get(key); ok {
-		if arr, ok2 := val.([]models.Holding); ok2 && arr != nil {
-			// Always non-nil array to avoid null JSON
-			if arr == nil {
-				arr = []models.Holding{}
-			}
-			c.JSON(http.StatusOK, arr)
-			return
-		}
+	if rows, ok := s.HoldingsCache.Get(key); ok && rows != nil {
+		c.JSON(http.StatusOK, rows)
+		return
 	}
 
 	rows, err := s.HoldingsService.GetAll(c.Request.Context())
@@ -138,34 +133,30 @@ func (s *Server) getAllHoldings(c *gin.Context) {
 		rows = []models.Holding{}
 	}
 
-	s.Cache.Set(key, rows)
+	s.HoldingsCache.Set(key, rows)
 	c.JSON(http.StatusOK, rows)
 }
 
 func (s *Server) getEntityHoldings(c *gin.Context) {
-	ent := normalizeEntity(c.Param("entity"))
-	if _, ok := validEntities[ent]; !ok {
+	// Parse and validate via enum
+	entRaw := strings.TrimSpace(c.Param("entity"))
+	ent, ok := domain.ParseEntity(entRaw)
+	if !ok {
 		s.badRequest(c, "invalid entity (use 'zurich' or 'new_york')")
 		return
 	}
 
-	key := "holdings:" + ent
-	if val, ok := s.Cache.Get(key); ok {
-		if arr, ok2 := val.([]models.Holding); ok2 && arr != nil {
-			if arr == nil {
-				arr = []models.Holding{}
-			}
-			c.JSON(http.StatusOK, arr)
-			return
-		}
+	key := cache.HoldingsKey{Entity: ent}
+	if rows, ok := s.HoldingsCache.Get(key); ok && rows != nil {
+		c.JSON(http.StatusOK, rows)
+		return
 	}
 
-	rows, err := s.HoldingsService.GetByEntity(c.Request.Context(), ent)
+	rows, err := s.HoldingsService.GetByEntity(c.Request.Context(), ent.String())
 	if err != nil {
-		// Treat "not found" as empty array with 200 for a friendlier API
 		if holdings.IsNotFound(err) {
 			rows = []models.Holding{}
-			s.Cache.Set(key, rows)
+			s.HoldingsCache.Set(key, rows)
 			c.JSON(http.StatusOK, rows)
 			return
 		}
@@ -176,32 +167,44 @@ func (s *Server) getEntityHoldings(c *gin.Context) {
 		rows = []models.Holding{}
 	}
 
-	s.Cache.Set(key, rows)
+	s.HoldingsCache.Set(key, rows)
 	c.JSON(http.StatusOK, rows)
 }
 
 func (s *Server) getTrades(c *gin.Context) {
-	limit := parseLimit(c.Query("limit"), 100, 1, 1000)
+	limitInt := parseLimit(c.Query("limit"), 100, 1, 1000)
+	limit := uint16(limitInt) // cache.TradesKey.Limit is uint16
 
-	var entPtr *string
-	if entQ := strings.TrimSpace(c.Query("entity")); entQ != "" {
-		ent := normalizeEntity(entQ)
-		if _, ok := validEntities[ent]; !ok {
+	entity := domain.EntityAll // default "all" means no filter
+
+	if raw := strings.TrimSpace(c.Query("entity")); raw != "" {
+		if ent, ok := domain.ParseEntity(raw); ok {
+			if ent != domain.EntityAll {
+				entity = ent
+			}
+		} else {
 			s.badRequest(c, "invalid entity (use 'zurich' or 'new_york')")
 			return
 		}
-		entPtr = &ent
 	}
 
-	rows, err := s.HoldingsService.GetTrades(c.Request.Context(), limit, entPtr)
+	// Cache key uses the enum string ("all" if none)
+	tkey := cache.TradesKey{Entity: entity, Limit: limit}
+	if rows, ok := s.TradesCache.Get(tkey); ok && rows != nil {
+		c.JSON(http.StatusOK, tradesResponse{Rows: rows})
+		return
+	}
+	s.Logger.Info("cache_miss", zap.String("entity", entity.String()), zap.Uint16("limit", limit))
+
+	rows, err := s.HoldingsService.GetTrades(c.Request.Context(), limit, &entity)
 	if err != nil {
 		s.internalError(c, "GetTrades", err)
 		return
 	}
-
-	resp := tradesResponse{Rows: rows}
-	if resp.Rows == nil {
-		resp.Rows = make([][]any, 0)
+	if rows == nil {
+		rows = make([]models.Trade, 0)
 	}
-	c.JSON(http.StatusOK, resp)
+
+	s.TradesCache.Set(tkey, rows)
+	c.JSON(http.StatusOK, tradesResponse{Rows: rows})
 }

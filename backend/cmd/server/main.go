@@ -11,61 +11,81 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/example/trades-aggregator/internal/cache"
 	"github.com/example/trades-aggregator/internal/config"
 	"github.com/example/trades-aggregator/internal/db"
 	"github.com/example/trades-aggregator/internal/holdings"
-	kafkaconsumer "github.com/example/trades-aggregator/internal/kafka"
 	httpserver "github.com/example/trades-aggregator/internal/http"
+	kafkaconsumer "github.com/example/trades-aggregator/internal/kafka"
 )
 
 func main() {
+	// Load config
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
-	logger, _ := zap.NewProduction()
-	defer logger.Sync()
 
+	// Logger
+	logger, _ := zap.NewProduction()
+	defer func() { _ = logger.Sync() }()
+
+	// Root context (cancellable; used by consumer)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// DB
 	dbpool, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
-		logger.Fatal("db", zap.Error(err))
+		logger.Fatal("db_connect_failed", zap.Error(err))
 	}
 	defer dbpool.Close()
 
+	// Domain services
 	svc := holdings.New(dbpool)
-	cache, err := cache.New(1<<26 /* ~64MB */, cfg.CacheTTL)
-	if err != nil {
-		logger.Fatal("cache", zap.Error(err))
+
+	// Kafka consumer (lifecycle tied to ctx)
+	consumer := kafkaconsumer.NewConsumer(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaGroupID, svc, logger)
+	go func() {
+		if err := consumer.Run(ctx); err != nil {
+			logger.Error("kafka_consumer_error", zap.Error(err))
+			cancel() // propagate failure
+		}
+	}()
+
+	// HTTP server (the HTTP package now constructs its own typed caches)
+	router := httpserver.NewServer(svc, logger, cfg.CORSOrigin)
+
+	srv := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           router.R,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
-	cons := kafkaconsumer.NewConsumer(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaGroupID, svc, logger)
+	// Start HTTP listener
 	go func() {
-		if err := cons.Run(ctx); err != nil {
-			logger.Error("consumer", zap.Error(err))
-			cancel()
+		logger.Info("http_listen_start", zap.String("addr", srv.Addr))
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatal("http_listen_failed", zap.Error(err))
 		}
 	}()
 
-	s := httpserver.NewServer(svc, cache, logger, cfg.CORSOrigin)
+	// Graceful shutdown on SIGINT/SIGTERM
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-sigCh
+	logger.Info("shutdown_signal", zap.String("signal", sig.String()))
 
-	server := &http.Server{Addr: ":" + cfg.Port, Handler: s.R}
-	go func() {
-		logger.Info("http listening", zap.String("port", cfg.Port))
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal("http", zap.Error(err))
-		}
-	}()
+	// Cancel background work (consumer) and shutdown HTTP
+	cancel()
 
-	// graceful shutdown
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
 	ctxShut, cancelShut := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelShut()
-	_ = server.Shutdown(ctxShut)
-	logger.Info("shutdown complete")
+	if err := srv.Shutdown(ctxShut); err != nil {
+		logger.Warn("http_shutdown_error", zap.Error(err))
+	}
+
+	logger.Info("shutdown_complete")
 }
