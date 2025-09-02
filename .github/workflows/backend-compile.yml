@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'backend/**'
-      - '.github/workflows/go-backend-build.yml'
+      - '.github/workflows/backend-compile.yml'
 
 # Cancel older runs of the same PR to save minutes
 concurrency:
