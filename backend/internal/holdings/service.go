@@ -73,9 +73,11 @@ func (s *Service) GetByEntity(ctx context.Context, entity string) ([]models.Hold
 func (s *Service) GetTrades(ctx context.Context, limit uint16, entity *domain.Entity) ([]models.Trade, error) {
 	q := `SELECT trade_id::text, entity::text, instrument_type::text, symbol, quantity, price, ts FROM trades`
 	var args []any
-	if entity != nil {
+	fmt.Println("Entity in GetTrades:", entity)
+	if entity != nil && *entity != domain.EntityAll {
+		fmt.Println("Filtering by entity:", entity.String())
 		q += ` WHERE entity = $1::entity`
-		args = append(args, *entity)
+		args = append(args, entity.String())
 	}
 	q += ` ORDER BY ts DESC LIMIT ` + fmt.Sprint(limit)
 	rows, err := s.DB.Query(ctx, q, args...)

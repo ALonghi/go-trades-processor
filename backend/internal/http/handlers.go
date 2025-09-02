@@ -194,6 +194,7 @@ func (s *Server) getTrades(c *gin.Context) {
 		c.JSON(http.StatusOK, tradesResponse{Rows: rows})
 		return
 	}
+	s.Logger.Info("cache_miss", zap.String("entity", entity.String()), zap.Uint16("limit", limit))
 
 	rows, err := s.HoldingsService.GetTrades(c.Request.Context(), limit, &entity)
 	if err != nil {

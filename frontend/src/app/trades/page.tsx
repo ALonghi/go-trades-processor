@@ -2,18 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GlassCard, Segmented, cn } from "../(components)/ui";
+import Trade from "../model/Trade";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
-type Row = [
-  tradeId: string,
-  entity: string,
-  itype: string,
-  symbol: string,
-  qty: number,
-  price: number | null,
-  ts: string,
-];
 type Entity = "" | "zurich" | "new_york";
 const ENTITY_OPTIONS: Array<{ value: Entity; label: string }> = [
   { value: "", label: "All" },
@@ -85,7 +77,7 @@ export default function Trades() {
   const [entity, setEntity] = useState<Entity>("");
   const [symbolFilter, setSymbolFilter] = useState("");
 
-  const { data, loading, error, reload } = usePolling<Row[]>(
+  const { data, loading, error, reload } = usePolling<Trade[]>(
     async () => {
       const url = new URL(`${API}/api/trades`);
       url.searchParams.set("limit", "200");
@@ -93,8 +85,8 @@ export default function Trades() {
       const r = await fetch(url, { cache: "no-store" });
       if (!r.ok) throw new Error(await r.text());
       const j = await r.json();
-      const rows: unknown = j?.rows;
-      return Array.isArray(rows) ? (rows as Row[]) : [];
+      const rows: Trade[] = j?.rows;
+      return Array.isArray(rows) ? (rows as Trade[]) : [];
     },
     [entity],
     5000,
@@ -103,7 +95,7 @@ export default function Trades() {
   const rows = useMemo(() => {
     const base = data ?? [];
     const f = symbolFilter.trim().toUpperCase();
-    return f ? base.filter((r) => r[3].toUpperCase().includes(f)) : base;
+    return f ? base.filter((r) => r.symbol.toUpperCase().includes(f)) : base;
   }, [data, symbolFilter]);
 
   return (
@@ -163,10 +155,10 @@ export default function Trades() {
                 <SkeletonRows />
               ) : rows.length ? (
                 rows.map((r) => (
-                  <tr key={r[0]} className="hover:bg-white/5">
+                  <tr key={r.trade_id} className="hover:bg-white/5">
                     <td className="py-2 pl-4">
                       <code className="rounded bg-white/10 px-1.5 py-0.5 text-[11px]">
-                        {r[0]}
+                        {r.trade_id}
                       </code>
                       <button
                         onClick={() =>
@@ -178,32 +170,32 @@ export default function Trades() {
                         Copy
                       </button>
                     </td>
-                    <td className="capitalize">{r[1].replace("_", " ")}</td>
+                    <td className="capitalize">{r.entity.replace("_", " ")}</td>
                     <td>
                       <span
                         className={cn(
                           "inline-block rounded-full border px-2 py-0.5 text-xs",
-                          r[2] === "crypto"
+                          r.instrument_type === "crypto"
                             ? "border-fuchsia-300/50"
                             : "border-sky-300/50",
                         )}
                       >
-                        {r[2]}
+                        {r.instrument_type}
                       </span>
                     </td>
-                    <td className="font-medium">{r[3]}</td>
+                    <td className="font-medium">{r.symbol}</td>
                     <td className="text-right tabular-nums">
-                      {fmtQty.format(r[4])}
+                      {fmtQty.format(r.quantity)}
                     </td>
                     <td className="text-right tabular-nums">
-                      {r[5] == null ? "-" : fmtPrice.format(r[5])}
+                      {r.price == null ? "-" : fmtPrice.format(r.price)}
                     </td>
-                    <td className="pr-4">
+                    <td className="pr-4 text-center">
                       <div className="text-xs text-white/80">
-                        {new Date(r[6]).toLocaleString()}
+                        {new Date(r.ts).toLocaleString()}
                       </div>
                       <div className="text-[10px] text-white/60">
-                        {fromNow(r[6])}
+                        {fromNow(r.ts)}
                       </div>
                     </td>
                   </tr>
