@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/example/trades-aggregator/internal/domain"
 	"github.com/example/trades-aggregator/internal/models"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -68,7 +70,7 @@ func (s *Service) GetByEntity(ctx context.Context, entity string) ([]models.Hold
 	return out, rows.Err()
 }
 
-func (s *Service) GetTrades(ctx context.Context, limit int, entity *string) ([][]any, error) {
+func (s *Service) GetTrades(ctx context.Context, limit uint16, entity *domain.Entity) ([]models.Trade, error) {
 	q := `SELECT trade_id::text, entity::text, instrument_type::text, symbol, quantity, price, ts FROM trades`
 	var args []any
 	if entity != nil {
@@ -81,16 +83,16 @@ func (s *Service) GetTrades(ctx context.Context, limit int, entity *string) ([][
 		return nil, err
 	}
 	defer rows.Close()
-	out := make([][]any, 0)
+	out := make([]models.Trade, 0)
 	for rows.Next() {
 		var tid, ent, itype, sym string
 		var qty float64
 		var price *float64
-		var ts any
+		var ts time.Time
 		if err := rows.Scan(&tid, &ent, &itype, &sym, &qty, &price, &ts); err != nil {
 			return nil, err
 		}
-		out = append(out, []any{tid, ent, itype, sym, qty, price, ts})
+		out = append(out, models.Trade{TradeID: tid, Entity: ent, InstrumentType: itype, Symbol: sym, Quantity: qty, Price: price, TS: ts})
 	}
 	return out, rows.Err()
 }

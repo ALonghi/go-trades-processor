@@ -15,8 +15,8 @@ import (
 	"github.com/example/trades-aggregator/internal/config"
 	"github.com/example/trades-aggregator/internal/db"
 	"github.com/example/trades-aggregator/internal/holdings"
-	kafkaconsumer "github.com/example/trades-aggregator/internal/kafka"
 	httpserver "github.com/example/trades-aggregator/internal/http"
+	kafkaconsumer "github.com/example/trades-aggregator/internal/kafka"
 )
 
 func main() {

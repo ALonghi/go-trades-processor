@@ -17,7 +17,7 @@ type Consumer struct {
 	Logger *zap.Logger
 }
 
-func NewConsumer(brokers, topic, groupID string, svc *holdings.Service, logger *zap.Logger) *Consumer {
+func NewConsumer(brokers, topic, groupID string, svc *holdings.Service, logger * /*  */ zap.Logger) *Consumer {
 	return &Consumer{
 		Reader: kafka.NewReader(kafka.ReaderConfig{
 			Brokers:  []string{brokers},
